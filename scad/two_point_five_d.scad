@@ -6,21 +6,30 @@
 //   image_array = 2D list of color strings representing the pixel grid.
 //   height_map = object mapping color strings to Z-axis extrusion heights.
 //   pixel_size = size of each pixel cube in X/Y dimensions. default is `1`.
-module two_point_five_d(image_array, height_map, pixel_size = 1) {
+//   center = center the output model on the X/Y plane. default is true
+module two_point_five_d(image_array, height_map, pixel_size = 1, center = true) {
     assert(is_object(height_map), "Expected height map to be an object");
     assert(is_list(image_array), "Expected image array definition to be a list");
     assert(is_num(pixel_size), "pixel_size argument should be a number");
 
-    for (col = [0 : len(image_array) - 1]) {
-        for (row = [0 : len(image_array[col]) - 1]) {
-            pixel_color = image_array[col][row];
+    x_trans = center ? -len(image_array[0]) / 2 * pixel_size: 0;
+    y_trans = center ? -len(image_array) / 2 * pixel_size: 0;
 
-            if (pixel_color != undef) {
-                z = height_map[pixel_color];
+    translate([x_trans, y_trans, 0]) {
+        mirror([0, 1, 0]) {
+            translate([0, -len(image_array) * pixel_size, 0])
+            for (col = [0 : len(image_array) - 1]) {
+                for (row = [0 : len(image_array[col]) - 1]) {
+                    pixel_color = image_array[col][row];
 
-                color(pixel_color) {
-                    translate([col * pixel_size, row * pixel_size, 0]) {
-                        cube([pixel_size, pixel_size, z]);
+                    if (pixel_color != undef) {
+                        z = height_map[pixel_color];
+
+                        color(pixel_color) {
+                            translate([row * pixel_size, col * pixel_size, 0]) {
+                                cube([pixel_size, pixel_size, z]);
+                            }
+                        }
                     }
                 }
             }

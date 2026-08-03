@@ -25,11 +25,13 @@ module two_point_five_d(image_array, height_map, pixel_size = 1, center = true) 
                     if (pixel_color != undef) {
                         z = height_map[pixel_color];
 
-                        color(pixel_color) {
-                            translate([row * pixel_size, col * pixel_size, 0]) {
-                                cube([pixel_size, pixel_size, z]);
-                            }
-                        }
+                        _draw_pixel(
+                            pixel_size = pixel_size,
+                            pixel_color = pixel_color,
+                            extrude_length = z,
+                            x_trans_pixels = row,
+                            y_trans_pixels = col
+                        );
                     }
                 }
             }
@@ -38,120 +40,95 @@ module two_point_five_d(image_array, height_map, pixel_size = 1, center = true) 
 }
 
 // Module: multi_layer_two_point_five_d()
-// Description: merges multiple image layers and their height maps, then
-//   renders the combined result as a 2.5D model using two_point_five_d().
-//   optionally overrides the final height map.
+// Description: takes a list of layers and merges them to a single image. for each layer the pixel
+//   that is drawn is the "top" layer (last pixel in the list at that layer that is not undefined).
+//   the height map from the layer the pixel is chosen is the one that is used to determine the
+//   extrusion height of the pixel. an additional layer offset can be applied by providing a list
+//   of offsets for each layer.
 // Arguments:
 //   image_layers = list of objects, each with "image" (2D color array) and
 //     "height_map" (color-to-height object) keys.
-//   override_height_map = optional object to replace the merged height map.
+//   layer_offsets = a list of heights to offset each layer. if no list is provided then no offsets
+//     are applied. default is undefined.
 //   pixel_size = size of each pixel cube in X/Y dimensions. default is `1`.
 //   center = center the output model on the X/Y plane. default is true.
 module multi_layer_two_point_five_d(
     image_layers,
-    override_height_map = undef,
+    layer_offsets = undef,
     pixel_size = 1,
     center = true,
 ) {
     assert(is_list(image_layers), "expected a list of input image layers to merge.");
     assert(
-        is_undef(additional_layer_offsets) ||
-            (is_list(additional_layer_offsets) &&
-                len(image_layers) == len(additional_layer_offsets)),
-        str("Expected additional layers to be undefined or the a list the same length as the ",
+        is_undef(layer_offsets) ||
+            (is_list(layer_offsets) &&
+                len(image_layers) == len(layer_offsets)),
+        str("Expected layer offsets to be undefined or the a list the same length as the ",
             "number of layers."
         )
-    );
-    assert(
-        is_undef(override_height_map) || is_object(override_height_map),
-        "Expected override_height_map to be undefined or an object of color value pairs",
     );
     assert(
         is_num(pixel_size), "Expected pixel size to be a number"
     );
 
-    original_images = [
-        for (i = [0 : len(image_layers) - 1])
-            if (!is_undef(image_layers[i])) image_layers[i]["image"]
-    ];
-
-    original_height_maps = [
+    height_maps = [
         for (i = [0 : len(image_layers) - 1])
             if (!is_undef(image_layers[i])) image_layers[i]["height_map"]
     ];
 
-    final_image = _merge_image(original_images);
-    final_height_map = is_undef(override_height_map) ? _merge_height_maps(original_height_maps) :
-        override_height_map;
+    layers = [
+        for (i = [0 : len(image_layers) - 1])
+            if (!is_undef(image_layers[i])) image_layers[i]["image"]
+    ];
 
-    two_point_five_d(
-        final_image,
-        final_height_map,
-        pixel_size = pixel_size,
-        center = center,
-    );
+    columns = len(layers[0]) - 1;
+    rows = len(layers[0][0]) - 1;
+
+
+    x_trans = center ? -rows / 2 * pixel_size: 0;
+    y_trans = center ? -columns / 2 * pixel_size: 0;
+
+    translate([x_trans, y_trans, 0]) {
+        mirror([0, 1, 0]) {
+            translate([0, -columns * pixel_size, 0]) {
+                for (col = [0 : columns]) {
+                    for (row = [0 : rows]) {
+                        cells_in_index = [ for (i = [0 : len(layers) - 1]) layers[i][col][row]];
+                        layer_index = _get_layer_index(cells_in_index, len(cells_in_index) - 1);
+
+                        pixel_color = cells_in_index[layer_index];
+
+                        if (pixel_color != undef) {
+                            z = height_maps[layer_index][pixel_color];
+                            z_offset = is_undef(layer_offsets) ? 0 : layer_offsets[image_index];
+
+                            _draw_pixel(
+                                pixel_size = pixel_size,
+                                pixel_color = pixel_color,
+                                extrude_length = z + z_offset,
+                                x_trans_pixels = row,
+                                y_trans_pixels = col
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
-function _merge_cells(remaining_cells, current_cell_val = undef) =
-    len(remaining_cells) == 0 ? current_cell_val :
-        !is_undef(current_cell_val) ? current_cell_val :
-            _merge_cells(
-                [ for (i = [0 : len(remaining_cells) - 2]) remaining_cells[i]],
-                remaining_cells[len(remaining_cells) - 1]
-            );
+function _get_layer_index(cells_at_index, layer_index) =
+    layer_index == 0 ? layer_index :
+        !is_undef(cells_at_index[layer_index]) ? layer_index :
+            _get_layer_index(cells_at_index, layer_index - 1);
 
+module _draw_pixel(pixel_size, pixel_color, extrude_length, x_trans_pixels, y_trans_pixels) {
+    x_trans = pixel_size * x_trans_pixels;
+    y_trans = pixel_size * y_trans_pixels;
 
-
-function _merge_rows(remaining_rows, current_row_value = undef) =
-    len(remaining_rows) == 0 ? current_row_value :
-    current_row_value == undef ? _merge_rows(
-        [for (i = [1:len(remaining_rows)-1]) remaining_rows[i]],
-        remaining_rows[0]
-    ) :
-    _merge_rows(
-        [for (i = [1:len(remaining_rows)-1]) remaining_rows[i]],
-        [
-            for (i = [0:len(current_row_value)-1]) _merge_cells(
-                [current_row_value[i],
-                remaining_rows[0][i]]
-            )
-        ]
-    );
-
-function _merge_image(remaining_image, current_image_value = undef) =
-    len(remaining_image) == 0
-        ? current_image_value
-        : is_undef(current_image_value)
-            ? _merge_image(
-                [for (i = [1 : len(remaining_image) - 1]) remaining_image[i]],
-                remaining_image[0]
-              )
-            : _merge_image(
-                [for (i = [1 : len(remaining_image) - 1]) remaining_image[i]],
-                [for (i = [0 : len(current_image_value) - 1])
-                    _merge_rows([current_image_value[i], remaining_image[0][i]])
-                ]
-              );
-
-function _merge_height_maps(height_maps, current_map = undef) =
-    len(height_maps) == 0
-        ? current_map
-        : is_undef(current_map)
-            ? _merge_height_maps(
-                [for (i = [1:len(height_maps)-1]) height_maps[i]],
-                height_maps[0]
-              )
-            : _merge_height_maps(
-                [for (i = [1:len(height_maps)-1]) height_maps[i]],
-                _merge_objects(current_map, height_maps[0])
-              );
-
-function _merge_objects(map1, map2) =
-    let (
-        pairs2 = [for (k = map2) [k, map2[k]]],
-        pairs1_unique = [for (k = map1)
-            if (!has_key(map2, k))
-                [k, map1[k]]],
-        combined = concat(pairs1_unique, pairs2)
-    )
-    object(combined);
+    color(pixel_color) {
+        translate([x_trans, y_trans, 0]) {
+            cube([pixel_size, pixel_size, extrude_length]);
+        }
+    }
+}

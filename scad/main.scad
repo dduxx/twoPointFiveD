@@ -80,10 +80,10 @@ module multi_layer_two_point_five_d(
         for (i = [0 : len(image_layers) - 1])
             if (!is_undef(image_layers[i])) image_layers[i]["image"]
     ];
-    offsets = [
+    offsets = !is_undef(layer_offsets) ? [
         for (i = [0 : len(layer_offsets) - 1])
             if (!is_undef(layer_offsets[i])) layer_offsets[i]
-    ];
+    ] : undef;
 
     columns = len(layers[0]) - 1;
     rows = len(layers[0][0]) - 1;

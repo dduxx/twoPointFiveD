@@ -100,7 +100,7 @@ module multi_layer_two_point_five_d(
 
                         if (pixel_color != undef) {
                             z = height_maps[layer_index][pixel_color];
-                            z_offset = is_undef(layer_offsets) ? 0 : layer_offsets[image_index];
+                            z_offset = is_undef(layer_offsets) ? 0 : layer_offsets[layer_index];
 
                             _draw_pixel(
                                 pixel_size = pixel_size,

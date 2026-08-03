@@ -80,6 +80,10 @@ module multi_layer_two_point_five_d(
         for (i = [0 : len(image_layers) - 1])
             if (!is_undef(image_layers[i])) image_layers[i]["image"]
     ];
+    offsets = [
+        for (i = [0 : len(layer_offsets) - 1])
+            if (!is_undef(layer_offsets[i])) layer_offsets[i]
+    ];
 
     columns = len(layers[0]) - 1;
     rows = len(layers[0][0]) - 1;
@@ -100,7 +104,7 @@ module multi_layer_two_point_five_d(
 
                         if (pixel_color != undef) {
                             z = height_maps[layer_index][pixel_color];
-                            z_offset = is_undef(layer_offsets) ? 0 : layer_offsets[layer_index];
+                            z_offset = is_undef(offsets) ? 0 : offsets[layer_index];
 
                             _draw_pixel(
                                 pixel_size = pixel_size,
